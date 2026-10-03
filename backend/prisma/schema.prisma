@@ -1,0 +1,216 @@
+// Panda Service Marketplace - Prisma Schema (Prisma 7)
+// Database URL is configured in prisma7.config.ts
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  VENDOR
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ListingType {
+  SERVICE
+  PRODUCT
+}
+
+enum PriceType {
+  FIXED
+  STARTING_FROM
+  QUOTE_ONLY
+}
+
+enum ListingStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  CAPTURED
+  REFUNDED
+  PAYOUT_RELEASED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  email     String?  @unique
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendorProfile  VendorProfile?
+  bookingsAsUser Booking[]      @relation("UserBookings")
+  reviews        Review[]
+  sentMessages   Message[]      @relation("SentMessages")
+}
+
+model VendorProfile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lineageDetails     String?
+  bio                String?
+  languages          String[]
+  yearsExperience    Int?
+  specializations    String[]
+  photoUrl           String?
+  videoIntroUrl      String?
+  verificationStatus VerificationStatus @default(PENDING)
+  aadhaarDocUrl      String?
+  selfieUrl          String?
+  bankAccountDetails Json?
+  dateOfBirth        DateTime?          @db.Date
+  address            String?
+  identityType       String?
+  identityLastFour   String?
+  avgRating          Float?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  listings          Listing[]
+  availabilitySlots AvailabilitySlot[]
+  bookingsAsVendor  Booking[]          @relation("VendorBookings")
+  reviews           Review[]
+  panda             Panda?
+}
+
+model Listing {
+  id              String        @id @default(cuid())
+  vendorId        String
+  vendor          VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type            ListingType   @default(SERVICE)
+  title           String
+  description     String
+  category        String
+  price           Float
+  priceType       PriceType     @default(FIXED)
+  durationMinutes Int?
+  includesSamagri Boolean       @default(false)
+  maxGroupSize    Int?
+  status          ListingStatus @default(ACTIVE)
+  photos          String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  bookings Booking[]
+}
+
+model AvailabilitySlot {
+  id        String        @id @default(cuid())
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  date      DateTime      @db.Date
+  startTime DateTime      @db.Time
+  endTime   DateTime      @db.Time
+  isBooked  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  booking Booking?
+}
+
+model Booking {
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation("UserBookings", fields: [userId], references: [id])
+  vendorId            String
+  vendor              VendorProfile     @relation("VendorBookings", fields: [vendorId], references: [id])
+  listingId           String
+  listing             Listing           @relation(fields: [listingId], references: [id])
+  slotId              String?           @unique
+  slot                AvailabilitySlot? @relation(fields: [slotId], references: [id])
+  status              BookingStatus     @default(PENDING)
+  performedOnBehalfOf String?
+  groupSize           Int               @default(1)
+  priceAgreed         Float
+  scheduledDate       DateTime
+  customerName        String?
+  customerPhone       String?
+  location            String?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  payment  Payment?
+  review   Review?
+  messages Message[]
+
+  @@index([vendorId, scheduledDate])
+  @@unique([vendorId, scheduledDate], map: "Booking_vendor_schedule_active_key", where: raw("(status <> 'CANCELLED'::\"BookingStatus\")"))
+}
+
+model Payment {
+  id                 String        @id @default(cuid())
+  bookingId          String        @unique
+  booking            Booking       @relation(fields: [bookingId], references: [id])
+  amount             Float
+  commissionAmount   Float
+  vendorPayoutAmount Float
+  gatewayTxnId       String?
+  status             PaymentStatus @default(CAPTURED)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model Review {
+  id        String        @id @default(cuid())
+  bookingId String        @unique
+  booking   Booking       @relation(fields: [bookingId], references: [id])
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id])
+  rating    Int
+  comment   String?
+  createdAt DateTime      @default(now())
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  bookingId  String?
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  message    String
+  createdAt  DateTime @default(now())
+}
+
+model Panda {
+  id           String   @id @default(cuid())
+  vendorId     String?  @unique
+  vendor       VendorProfile? @relation(fields: [vendorId], references: [id])
+  name         String
+  phone        String   @unique
+  email        String?
+  photoUrl     String
+  bio          String?
+  languages    String[]
+  experience   Int?
+  specialities String[]
+  status       String   @default("APPROVED")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

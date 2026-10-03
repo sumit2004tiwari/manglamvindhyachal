@@ -1,0 +1,6 @@
+{
+  "watch": ["src", ".env", "tsconfig.json", "tsconfig.build.json"],
+  "ext": "ts,json,env",
+  "ignore": ["src/generated/**"],
+  "exec": "npm run start:dev"
+}
